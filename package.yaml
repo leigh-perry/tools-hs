@@ -1,0 +1,74 @@
+# This YAML file describes your package. Stack will automatically generate a
+# Cabal file when you run `stack build`. See the hpack website for help with
+# this file: <https://github.com/sol/hpack>.
+name: tools-hs
+version: '0.0.0'
+github: "githubuser/tools-hs"
+license: MIT
+author: "Author name here"
+maintainer: "Author name here"
+# synopsis: A new template package.
+# description: tools-hs is a new template package.
+# category: Other
+
+extra-source-files:
+- package.yaml
+- README.md
+- stack.yaml
+
+ghc-options: -Wall
+
+library:
+  dependencies:
+  - base
+  - directory
+  - filepath
+  - unix
+  - split
+  - parsec
+  - containers
+  - transformers
+  - either
+  - casing
+  source-dirs: src
+
+executables:
+  tools-hs:
+    source-dirs: app
+    main: Main.hs
+    dependencies:
+    - base
+    - tools-hs
+    - optparse-applicative
+    - transformers
+    ghc-options:
+    - -rtsopts
+    - -threaded
+    - -with-rtsopts=-N
+
+benchmarks:
+  tools-hs-benchmarks:
+    source-dirs: benchmark
+    main: Main.hs
+    dependencies:
+    - base
+    - tools-hs
+    - criterion
+    ghc-options:
+    - -rtsopts
+    - -threaded
+    - -with-rtsopts=-N
+
+tests:
+  tools-hs-test-suite:
+    source-dirs: test
+    main: Main.hs
+    dependencies:
+    - base
+    - tools-hs
+    - tasty
+    - tasty-hspec
+    ghc-options:
+    - -rtsopts
+    - -threaded
+    - -with-rtsopts=-N
