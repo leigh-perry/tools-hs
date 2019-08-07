@@ -40,7 +40,7 @@ commandParser = addInfo programOptions "tools-hs [ gen-topology | gen-schema ]"
     filepathArg s = strArgument (help (s <> " file path") <> metavar "FILEPATH")
     tableNameArg = strArgument (help "Table name" <> metavar "TABLE")
     keyColumnArg = strArgument (help "Key column name" <> metavar "COLUMN")
-    globalKTablesArg = (\s -> read (trace s s)) <$> strArgument (help "Global KTables" <> metavar "GLOBALKTABLE")
+    globalKTablesArg = read <$> strArgument (help "Global KTables" <> metavar "GLOBALKTABLE")
     namespaceArg = strArgument (help "Namespace" <> metavar "NAMESPACE")
     expand :: (String, Parser a, String) -> Mod CommandFields a
     expand (cmdName, parser, desc) = command cmdName $ addInfo parser desc

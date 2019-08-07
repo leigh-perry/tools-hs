@@ -20,13 +20,14 @@ genTopology a gkts = do
   let jps = nonGlobalJoinPoints a gkts True
   let rkjps = nonGlobalJoinPoints a gkts False
   let djps = distinctJoinPointsPlusFrom a
+  let djpids = distinctJoinPointIds a
   let serdeTables = Shared.distinct $ jpTable <$> djps
   putStrLn "\n//// Key serdes\n"
-  traverse_ printSerdeKey djps
+  traverse_ printSerdeKey djpids
   putStrLn "\n//// Value serdes\n"
   traverse_ printSerdeValue serdeTables
   putStrLn "\n//// Topic names\n"
-  traverse_ printTopicName $ rName <$> aTables a
+  traverse_ printTopicName $ aTables a
   putStrLn "\n//// Global KTables\n"
   traverse_ printGlobalKTable gns
   putStrLn "\n//// KTables using topic key\n"
@@ -39,6 +40,9 @@ genTopology a gkts = do
   printAccumulationClass a
   putStrLn "\n//////////////// gen-schema.sh ////////////////\n"
   printJoinPointTableKeys a
+  putStrLn "\n////////////////\n"
+  print $ aResolvedJoins a
+  print $ aFromTable a
 
 printSerdeKey :: JoinPoint -> IO ()
 printSerdeKey jp = do
@@ -51,6 +55,8 @@ printSerdeValue :: String -> IO ()
 printSerdeValue table = do
   let ts = Casing.pascal table
   putStrLn $ "implicit val hasSerde_" <> ts <> "Envelope: HasSerde[" <> ts <> "Envelope] ="
+  putStrLn "  HasSerde.instance(cfg => Kafka.avroSerde(cfg.schemaRegistryConfig, isKey = false))"
+  putStrLn $ "implicit val hasSerde_" <> ts <> ": HasSerde[" <> ts <> "] ="
   putStrLn "  HasSerde.instance(cfg => Kafka.avroSerde(cfg.schemaRegistryConfig, isKey = false))"
 
 printTopicName :: String -> IO ()
@@ -80,8 +86,9 @@ printKTable :: JoinPoint -> IO ()
 printKTable jp = do
   let ts = Casing.pascal $ jpTable jp
   let cs = Casing.pascal $ jpColumn jp
-  putStrLn $ "val kt" <> ts <> "_" <> cs <> ": KTable[" <> ts <> "Key" <> cs <> ", " <> ts <> "] ="
-  putStrLn $ "  kTable[" <> ts <> "Key" <> cs <> ", " <> ts <> "Envelope, " <> ts <> "]("
+  let key = ts <> "Key" <> cs
+  putStrLn $ "val kt" <> ts <> "_" <> cs <> ": KTable[" <> key <> ", " <> ts <> "] ="
+  putStrLn $ "  kTable[" <> key <> ", " <> ts <> "Envelope, " <> ts <> "]("
   putStrLn "    cfg,"
   putStrLn "    builder,"
   putStrLn $ "    cleansed_" <> ts <> ","
@@ -99,8 +106,9 @@ printKTableRekeyed jp =
     c = jpColumn jp
     ts = Casing.pascal t
     cs = Casing.pascal c
+    oldkey = ts <> "Key" <> "Id" -- TODO look up
     newkey = ts <> "Key" <> cs
-    newKeyType = "Long" -- TODO determine type ;  Generate avsc's for rekey columns
+    newKeyType = "Long" -- TODO determine type
     newkeywrapper = ts <> "_" <> cs
     envtype = ts <> "Envelope"
     isOptional = False {-not $ isPk t c-}
@@ -108,8 +116,7 @@ printKTableRekeyed jp =
     printNonOpt = do
       putStrLn $ "val kt" <> newkeywrapper <> ": KTable[" <> newkey <> ", " <> ts <> "] ="
       putStrLn $
-        "  kTableRekeyed[" <> newkey <> ", " <> envtype <> ", " <> ts <> ", " <> newKeyType <> ", " <> newkeywrapper <>
-        "]("
+        "  kTableRekeyed[" <> oldkey <> ", " <> envtype <> ", " <> ts <> ", " <> newKeyType <> ", " <> newkey <> "]("
       putStrLn "    cfg,"
       putStrLn "    builder,"
       putStrLn $ "    cleansed_" <> ts <> ","
@@ -150,7 +157,7 @@ printJoinResult :: JoinPoint -> IO ()
 printJoinResult jp = putStrLn $ "  " <> joinPointName jp <> ": Option[" <> joinPointType jp <> "] = None,"
 
 printJoinPointTableKeys :: Analysis -> IO ()
-printJoinPointTableKeys a = traverse_ printJp $ distinctJoinPointsPlusFrom a
+printJoinPointTableKeys a = traverse_ printJp $ Shared.distinct (distinctJoinPointsPlusFrom a <> distinctJoinPointIds a)
   where
     printJp jp = putStrLn $ "  " <> jpTable jp <> ":" <> jpColumn jp
 
@@ -166,7 +173,7 @@ joinPointType jp =
    in ts <> "Envelope"
 
 globalKtableNames :: Analysis -> [String] -> [String]
-globalKtableNames a globalKtables = filter (`elem` globalKtables) $ rName <$> aTables a
+globalKtableNames a globalKtables = filter (`elem` globalKtables) $ aTables a
 
 nonGlobalJoinPoints :: Analysis -> [String] -> Bool -> [JoinPoint]
 nonGlobalJoinPoints a gkts pk = filter f $ distinctJoinPoints a
@@ -185,3 +192,6 @@ distinctJoinPointsPlusFrom a = distinctJoinPoints a <> [JoinPoint f fpk]
   where
     f = rName $ qFrom $ aQuery a
     fpk = "id" -- TODO look up
+
+distinctJoinPointIds :: Analysis -> [JoinPoint]
+distinctJoinPointIds a = Shared.distinct $ (\rj -> (rjFrom rj) {jpColumn = "id"}) <$> aResolvedJoins a

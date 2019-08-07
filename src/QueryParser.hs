@@ -117,9 +117,11 @@ data ResolvedJoin =
 data Analysis =
   Analysis
     { aQuery :: Query
-    , aTables :: [NameAlias]
     , aFromTable :: String
     , aResolvedJoins :: [ResolvedJoin]
+    , aTables :: [String]
+    , aKeySerdes :: [String]
+    , aValueSerdes :: [String]
     }
   deriving (Show, Eq)
 
@@ -135,11 +137,19 @@ analyse filepath = do
 
 resolve :: Query -> Either ParseSqlError Analysis
 resolve query = do
-  let fTable = qFrom query
-  let jts = jTarget <$> qJoins query
+  let fTable = rName $ qFrom query
+  let jts = rName . jTarget <$> qJoins query
   let tnm = tableNameMap query
   rjs <- resolveJoins tnm $ qJoins query
-  return $ Analysis {aQuery = query, aTables = fTable : jts, aFromTable = rName fTable, aResolvedJoins = rjs}
+  return $
+    Analysis
+      { aQuery = query
+      , aFromTable = fTable
+      , aResolvedJoins = rjs
+      , aTables = fTable : jts
+      , aKeySerdes = []
+      , aValueSerdes = []
+      }
 
 tableNameMap :: Query -> Map.Map String String
 tableNameMap q = Map.fromList $ fromNames <> joinNames
