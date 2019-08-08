@@ -139,7 +139,14 @@ printFromStream t = do
   let ts = sym [t]
   let key = sym [t, "id", "key"]
   let env = sym [t, "Envelope"]
-  putStrLn $ "val fromStream = kStream[" <> key <> "Key, " <> env <> "](cfg, builder, cleansed_" <> ts <> ")"
+  -- putStrLn $ "val fromStream = kStream[" <> key <> "Key, " <> env <> "](cfg, builder, cleansed_" <> ts <> ")"
+  putStrLn $ "val fromStream ="
+  putStrLn $ "  kStream[" <> key <> ", " <> env <> ", " <> ts <> "]("
+  putStrLn $ "    cfg,"
+  putStrLn $ "    builder,"
+  putStrLn $ "    cleansed_" <> ts <> ","
+  putStrLn $ "    _.after"
+  putStrLn $ "  )"
 
 printAccumulationClass :: Analysis -> IO ()
 printAccumulationClass a = do
