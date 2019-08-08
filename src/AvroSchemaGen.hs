@@ -39,8 +39,8 @@ relationKeyAvsc :: Relation -> String -> String -> Either GenAvscError String
 relationKeyAvsc r k ns = do
   let ku = toUpper <$> k
   let keyname = sym [rName r, k, "key"]
-  let pkColumns = filter (\c -> cName c == ku) $ rColumns r
-  c2f <- traverse columnToField pkColumns
+  let keyColumns = filter (\c -> cName c == ku) $ rColumns r
+  c2f <- traverse (columnToField' NotNullable) keyColumns
   let fields = intercalate "," c2f
   Right $ avscPreamble keyname ns <> ",\"fields\": [" <> fields <> "]}"
 
@@ -82,11 +82,16 @@ relationValueAvsc r ns = do
     "}"
 
 columnToField :: Column -> Either GenAvscError String
-columnToField c = (\s -> "{\"name\": \"" <> cName c <> "\",\"type\": " <> s <> "}") <$> columnToType c
+columnToField c = columnToField' (cNullability c) c
 
-columnToType :: Column -> Either GenAvscError String
-columnToType c =
-  case cNullability c of
+--columnToType :: Column -> Either GenAvscError String
+--columnToType c = columnToType' (cNullability c) c
+columnToField' :: Nullability -> Column -> Either GenAvscError String
+columnToField' n c = (\s -> "{\"name\": \"" <> cName c <> "\",\"type\": " <> s <> "}") <$> columnToType' n c
+
+columnToType' :: Nullability -> Column -> Either GenAvscError String
+columnToType' n c =
+  case n of
     NotNullable -> flatten <$> typeOf c
     Nullable -> (\as -> "[\"null\"," <> flatten as <> "],\"default\":null") <$> typeOf c
   where
