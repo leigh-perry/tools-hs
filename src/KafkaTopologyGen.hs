@@ -103,7 +103,7 @@ printKTableRekeyed jp =
     c = jpColumn jp
     ts = sym [t]
     cs = sym [c]
-    oldkey = ts <> "id" <> "key" -- TODO look up
+    idKey = ts <> "id" <> "key" -- TODO look up
     newkey = sym [ts, cs, "key"]
     newKeyType = "Long" -- TODO determine type
     newkeywrapper = ts <> "_" <> cs
@@ -113,7 +113,7 @@ printKTableRekeyed jp =
     printNonOpt = do
       putStrLn $ "val kt" <> newkeywrapper <> ": KTable[" <> newkey <> ", " <> ts <> "] ="
       putStrLn $
-        "  kTableRekeyed[" <> oldkey <> ", " <> env <> ", " <> ts <> ", " <> newKeyType <> ", " <> newkey <> "]("
+        "  kTableRekeyed[" <> idKey <> ", " <> env <> ", " <> ts <> ", " <> newKeyType <> ", " <> newkey <> "]("
       putStrLn "    cfg,"
       putStrLn "    builder,"
       putStrLn $ "    cleansed_" <> ts <> ","
@@ -135,10 +135,11 @@ printKTableRekeyed jp =
       putStrLn " )"
 
 printFromStream :: String -> IO ()
-printFromStream table = do
-  let ts = sym [table]
-  putStrLn $
-    "val fromStream = kStream[" <> ts <> "Key, " <> ts <> "Envelope" <> "](cfg, builder, cleansed_" <> ts <> ")"
+printFromStream t = do
+  let ts = sym [t]
+  let key = sym [t, "id", "key"]
+  let env = sym [t, "Envelope"]
+  putStrLn $ "val fromStream = kStream[" <> key <> "Key, " <> env <> "](cfg, builder, cleansed_" <> ts <> ")"
 
 printAccumulationClass :: Analysis -> IO ()
 printAccumulationClass a = do

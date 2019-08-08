@@ -185,29 +185,3 @@ resolveJoin tnm j = do
   where
     tableName :: String -> Either ParseSqlError String
     tableName t = maybeToRight (UnknownAlias t) (tnm !? t)
-{-
-  --  let jps = nonGlobalJoinPoints rjs gkts True
-  --  let reykeyjps = nonGlobalJoinPoints rjs gkts False
-  --  let djpspk = distinctJoinPointPks rjs
-  -- let djps = distinctJoinPointsPlusFrom rhs
-  -- let djpids =
-  -- let serdeTables = distinct $ jpTable <$> djps
-
--- Bool indicates if must be primary key column
-nonGlobalJoinPoints :: [ResolvedJoin] -> [String] -> Bool -> [JoinPoint]
-nonGlobalJoinPoints rjs gkts pk = filter f $ distinctJoinPoints rjs
-  where
-    f :: JoinPoint -> Bool
-    f jp =
-      let t = jpTable jp
-          c = jpColumn jp
-       in notElem t gkts && pk == isPk t c
-
---distinctJoinPointsPlusFrom :: [ResolvedJoin] -> [JoinPoint]
---distinctJoinPointsPlusFrom a = distinctJoinPoints a <> [JoinPoint f fpk]
---  where
---    f = rName $ qFrom $ aQuery a
---    fpk = "id" -- TODO look up
-distinctJoinPointPks :: [ResolvedJoin] -> [JoinPoint]
-distinctJoinPointPks rjs = distinct $ (\rj -> (rjFrom rj) {jpColumn = "id"}) <$> rjs
--}
