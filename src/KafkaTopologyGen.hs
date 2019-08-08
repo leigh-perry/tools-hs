@@ -4,11 +4,11 @@ module KafkaTopologyGen
   ( genTopology
   ) where
 
-import ConfigData (isOptional, pkConstraints)
+import ConfigData (findColumn, pkConstraints)
 import Data.Char (toLower, toUpper)
 import Data.Foldable (traverse_)
 import Data.Map.Strict ((!?))
-import Ddl hiding (rName)
+import Ddl
 import QueryParser hiding (sym)
 import Shared (distinct, sym)
 
@@ -27,7 +27,7 @@ genTopology a gkts = do
   putStrLn "\n//// KTables with re-key\n"
   traverse_ printKTableRekeyed $ aRekeyJoinPoints a
   putStrLn "\n//// Principal table stream\n"
-  printFromStream $ rName (qFrom $ aQuery a)
+  printFromStream $ naName (qFrom $ aQuery a)
   putStrLn "\n//// Accumulated result of the join\n"
   printAccumulationClass a
   putStrLn "\n//////////////// gen-schema.sh ////////////////\n"
@@ -105,12 +105,12 @@ printKTableRekeyed jp =
     cs = sym [c]
     idKey = sym [t, "id", "key"] -- TODO look up pk name
     newkey = sym [t, cs, "key"]
-    newKeyType = typeOf c
-    newkeywrapper = ts <> "_" <> cs
+    column = findColumn t c
+    newKeyType = typeOf $ column
     env = sym [t, "Envelope"]
-    opt = isOptional t c
+    opt = cNullability column == Nullable
     printNonOpt = do
-      putStrLn $ "val kt" <> newkeywrapper <> ": KTable[" <> newkey <> ", " <> ts <> "] ="
+      putStrLn $ "val kt" <> newkey <> ": KTable[" <> newkey <> ", " <> ts <> "] ="
       putStrLn $
         "  kTableRekeyed[" <> idKey <> ", " <> env <> ", " <> ts <> ", " <> newKeyType <> ", " <> newkey <> "]("
       putStrLn "    cfg,"
@@ -121,9 +121,9 @@ printKTableRekeyed jp =
       putStrLn $ "    " <> newkey <> "(_)"
       putStrLn " )"
     printOpt = do
-      putStrLn $ "val kt" <> newkeywrapper <> ": KTable[" <> newkey <> ", " <> ts <> "] ="
+      putStrLn $ "val kt" <> newkey <> ": KTable[" <> newkey <> ", " <> ts <> "] ="
       putStrLn $
-        "  kTableRekeyedOptional[" <> newkey <> ", " <> env <> ", " <> ts <> ", " <> newKeyType <> ", " <> newkeywrapper <>
+        "  kTableRekeyedOptional[" <> newkey <> ", " <> env <> ", " <> ts <> ", " <> newKeyType <> ", " <> newkey <>
         "]("
       putStrLn "    cfg,"
       putStrLn "    builder,"

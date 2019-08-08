@@ -4,7 +4,6 @@ module ConfigData
   , relations
   , pkConstraints
   , isPk
-  , isOptional
   , findColumn
   ) where
 
@@ -54,9 +53,6 @@ findColumn tl cl = column
       case result of
         (Just c) -> c
         Nothing -> error "wtf"
-
-isOptional :: String -> String -> Bool
-isOptional tl cl = cNullability (findColumn tl cl) == Nullable
 
 -- TODO query DB directly
 {-

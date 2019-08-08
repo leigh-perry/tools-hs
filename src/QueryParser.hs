@@ -65,8 +65,8 @@ data ParseSqlError
 
 data NameAlias =
   NameAlias
-    { rName :: String
-    , rAlias :: Maybe String
+    { naName :: String
+    , naAlias :: Maybe String
     }
   deriving (Show, Eq)
 
@@ -143,8 +143,8 @@ resolve :: Query -> [String] -> Either ParseSqlError Analysis
 resolve query globalKtables = do
   let tnm = tableNameMap query
   resolvedJoins <- traverse (resolveJoin tnm) $ qJoins query
-  let from = rName $ qFrom query
-  let joinTables = rName . jTarget <$> qJoins query
+  let from = naName $ qFrom query
+  let joinTables = naName . jTarget <$> qJoins query
   let allTables = from : joinTables
   let gktables = filter (`elem` globalKtables) allTables
   let distinctJoinPoints = distinct $ (\rj -> [rjFrom rj, rjTo rj]) =<< resolvedJoins
@@ -180,11 +180,11 @@ tableNameMap q = Map.fromList $ fromNames <> joinNames
     joinNames = mapAlias =<< (jTarget <$> qJoins q)
     mapAlias :: NameAlias -> [(String, String)]
     mapAlias n =
-      case rAlias n of
+      case naAlias n of
         Just a -> [(a, t), (t, t)]
         Nothing -> [(t, t)]
       where
-        t = rName n
+        t = naName n
 
 resolveJoin :: Map.Map String String -> Join -> Either ParseSqlError ResolvedJoin
 resolveJoin tnm j = do
