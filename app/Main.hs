@@ -6,7 +6,7 @@ import Data.Semigroup ((<>))
 import Debug.Trace
 import KafkaTopologyGen (genTopology)
 import Options.Applicative
-import QueryParser (parseSql)
+import QueryParser (analyse)
 
 data Command
   = GenerateTopology
@@ -54,7 +54,7 @@ main = do
     GenerateTopology sqlFp globalKtables ->
       void $
       runExceptT $ do
-        a <- QueryParser.parseSql sqlFp
+        a <- QueryParser.analyse sqlFp globalKtables
         liftIO $ void $ KafkaTopologyGen.genTopology a globalKtables
     GenerateSchema tableName keyColumnName keyAvscFp valueAvscFp ns ->
       runExceptT (AvroSchemaGen.genAvsc tableName keyColumnName keyAvscFp valueAvscFp ns) >>= print

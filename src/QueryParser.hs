@@ -7,6 +7,7 @@ import Control.Monad.Trans.Except (ExceptT, except)
 import Data.Either.Combinators (maybeToRight)
 import Data.Map.Strict ((!?))
 import qualified Data.Map.Strict as Map (Map, fromList)
+import Shared (distinct)
 import Text.Parsec.Char
 import Text.ParserCombinators.Parsec
 
@@ -59,9 +60,6 @@ data ParseSqlError
   = ParseSqlError ParseError
   | UnknownAlias String
   deriving (Show, Eq)
-
-parseSql :: String -> ExceptT ParseSqlError IO Analysis
-parseSql = analyse
 
 data NameAlias =
   NameAlias
@@ -120,35 +118,50 @@ data Analysis =
     , aFromTable :: String
     , aResolvedJoins :: [ResolvedJoin]
     , aTables :: [String]
-    , aKeySerdes :: [String]
+    , aGlobalKtables :: [String]
+    , aDistinctJoinPoints :: [JoinPoint]
+    , aKeySerdes :: [JoinPoint]
     , aValueSerdes :: [String]
     }
   deriving (Show, Eq)
 
 ----
-analyse :: String -> ExceptT ParseSqlError IO Analysis
-analyse filepath = do
+analyse :: String -> [String] -> ExceptT ParseSqlError IO Analysis
+analyse filepath globalKtables = do
   s <- liftIO $ readFile filepath
   let result = parse sqlParser "SQL" s
   except $
     case result of
       Left e -> Left $ ParseSqlError e
-      Right query -> resolve query
+      Right query -> resolve query globalKtables
 
-resolve :: Query -> Either ParseSqlError Analysis
-resolve query = do
-  let fTable = rName $ qFrom query
-  let jts = rName . jTarget <$> qJoins query
+resolve :: Query -> [String] -> Either ParseSqlError Analysis
+resolve query globalKtables = do
   let tnm = tableNameMap query
-  rjs <- resolveJoins tnm $ qJoins query
+  resolvedJoins <- traverse (resolveJoin tnm) $ qJoins query
+  let from = rName $ qFrom query
+  let joinTables = rName . jTarget <$> qJoins query
+  let allTables = from : joinTables
+  let gktables = filter (`elem` globalKtables) allTables
+  let distinctJoinPoints = distinct $ (\rj -> [rjFrom rj, rjTo rj]) =<< resolvedJoins
+  -- key serde for distinct [ (every joinpoint table)*(id,joincol) + from(id) ]
+  let keySerdes =
+        distinct $
+        [JoinPoint from "id"] <> -- from table
+        distinctJoinPoints <> -- join point columns
+        ((\jp -> jp {jpColumn = "id"}) <$> distinctJoinPoints) <> -- table primary keys
+        ((`JoinPoint` "id") <$> gktables) -- globalktable primary keys
+  let valueSerdes = distinct $ from : (jpTable <$> distinctJoinPoints) -- value serde for distinct [ (JoinPoint tables) + from ]
   return $
     Analysis
       { aQuery = query
-      , aFromTable = fTable
-      , aResolvedJoins = rjs
-      , aTables = fTable : jts
-      , aKeySerdes = []
-      , aValueSerdes = []
+      , aFromTable = from
+      , aResolvedJoins = resolvedJoins
+      , aTables = allTables
+      , aGlobalKtables = gktables
+      , aDistinctJoinPoints = distinctJoinPoints
+      , aKeySerdes = keySerdes
+      , aValueSerdes = valueSerdes
       }
 
 tableNameMap :: Query -> Map.Map String String
@@ -164,9 +177,6 @@ tableNameMap q = Map.fromList $ fromNames <> joinNames
       where
         t = rName n
 
-resolveJoins :: Map.Map String String -> [Join] -> Either ParseSqlError [ResolvedJoin]
-resolveJoins tnm = traverse (resolveJoin tnm)
-
 resolveJoin :: Map.Map String String -> Join -> Either ParseSqlError ResolvedJoin
 resolveJoin tnm j = do
   tf <- tableName (tcTableName $ jFrom j)
@@ -175,3 +185,29 @@ resolveJoin tnm j = do
   where
     tableName :: String -> Either ParseSqlError String
     tableName t = maybeToRight (UnknownAlias t) (tnm !? t)
+{-
+  --  let jps = nonGlobalJoinPoints rjs gkts True
+  --  let reykeyjps = nonGlobalJoinPoints rjs gkts False
+  --  let djpspk = distinctJoinPointPks rjs
+  -- let djps = distinctJoinPointsPlusFrom rhs
+  -- let djpids =
+  -- let serdeTables = distinct $ jpTable <$> djps
+
+-- Bool indicates if must be primary key column
+nonGlobalJoinPoints :: [ResolvedJoin] -> [String] -> Bool -> [JoinPoint]
+nonGlobalJoinPoints rjs gkts pk = filter f $ distinctJoinPoints rjs
+  where
+    f :: JoinPoint -> Bool
+    f jp =
+      let t = jpTable jp
+          c = jpColumn jp
+       in notElem t gkts && pk == isPk t c
+
+--distinctJoinPointsPlusFrom :: [ResolvedJoin] -> [JoinPoint]
+--distinctJoinPointsPlusFrom a = distinctJoinPoints a <> [JoinPoint f fpk]
+--  where
+--    f = rName $ qFrom $ aQuery a
+--    fpk = "id" -- TODO look up
+distinctJoinPointPks :: [ResolvedJoin] -> [JoinPoint]
+distinctJoinPointPks rjs = distinct $ (\rj -> (rjFrom rj) {jpColumn = "id"}) <$> rjs
+-}

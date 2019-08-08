@@ -4,14 +4,14 @@ module AvroSchemaGen
   ( genAvsc
   ) where
 
-import ConfigData (pkConstraints, relations)
+import ConfigData (relations)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, except)
 import Data.Char (toLower, toUpper)
 import Data.List (intercalate)
 import Data.Map.Strict ((!?))
 import Ddl
-import qualified Text.Casing as Casing (pascal)
+import Shared
 
 data GenAvscError
   = UnknownTable String
@@ -38,30 +38,28 @@ writeValueAvsc fp ns relation = except (relationValueAvsc relation ns) >>= (lift
 relationKeyAvsc :: Relation -> String -> String -> Either GenAvscError String
 relationKeyAvsc r k ns = do
   let ku = toUpper <$> k
-  let kp = Casing.pascal k
+  let keyname = sym [rName r, k, "key"]
   let pkColumns = filter (\c -> cName c == ku) $ rColumns r
   c2f <- traverse columnToField pkColumns
   let fields = intercalate "," c2f
-  let relationName = toClassCase $ rName r
-  Right $ avscPreamble (relationName <> "Key" <> kp <> "") ns <> ",\"fields\": [" <> fields <> "]}"
+  Right $ avscPreamble keyname ns <> ",\"fields\": [" <> fields <> "]}"
 
 avscPreamble :: String -> String -> String
-avscPreamble relationName ns = "{\"type\":\"record\",\"name\":\"" <> relationName <> "\",\"namespace\":\"" <> ns <> "\""
+avscPreamble name ns = "{\"type\":\"record\",\"name\":\"" <> name <> "\",\"namespace\":\"" <> ns <> "\""
 
 relationValueAvsc :: Relation -> String -> Either GenAvscError String
 relationValueAvsc r ns = do
   c2f <- traverse columnToField (rColumns r)
   let fields = intercalate "," c2f
-  let relationName = toClassCase $ rName r
-  -- Right $ avscPreamble relationName ns <> ",\"fields\": [" <> fields <> "]}"
+  let name = sym [rName r]
   Right $
-    avscPreamble (relationName <> "Envelope") ns <> "," <> "\"fields\":[" <> "{" <> "\"name\":\"before\"," <>
+    avscPreamble (sym [rName r, "Envelope"]) ns <> "," <> "\"fields\":[" <> "{" <> "\"name\":\"before\"," <>
     "\"type\":[" <>
     "\"null\"," <>
     "{" <>
     "\"type\":\"record\"," <>
     "\"name\":\"" <>
-    relationName <>
+    name <>
     "\"," <>
     "\"fields\":[" <>
     fields <>
@@ -75,7 +73,7 @@ relationValueAvsc r ns = do
     "\"type\":[" <>
     "\"null\"," <>
     "\"" <>
-    relationName <>
+    name <>
     "\"" <>
     "]," <>
     "\"default\":null" <>
@@ -128,12 +126,10 @@ findRelation tableName =
   case relations !? (toUpper <$> tableName) of
     Just r -> Right r
     _ -> Left $ UnknownTable tableName
-
+{-
 findPkConstraints :: String -> Either GenAvscError [PkConstraint]
 findPkConstraints tableName =
   case pkConstraints !? (toUpper <$> tableName) of
     Just r -> Right r
-    _ -> Left $ MissingPrimaryKey tableName
-
-toClassCase :: String -> String
-toClassCase s = Casing.pascal $ toLower <$> s
+    _      -> Left $ MissingPrimaryKey tableName
+-}
