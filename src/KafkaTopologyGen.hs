@@ -4,11 +4,11 @@ module KafkaTopologyGen
   ( genTopology
   ) where
 
-import ConfigData (pkConstraints)
+import ConfigData (isOptional, pkConstraints)
 import Data.Char (toLower, toUpper)
 import Data.Foldable (traverse_)
 import Data.Map.Strict ((!?))
-import Ddl (pkcColumnName)
+import Ddl hiding (rName)
 import QueryParser hiding (sym)
 import Shared (distinct, sym)
 
@@ -23,9 +23,9 @@ genTopology a gkts = do
   putStrLn "\n//// Global KTables\n"
   traverse_ printGlobalKTable $ aGlobalKtables a
   putStrLn "\n//// KTables using topic key\n"
-  traverse_ printKTable $ aDistinctJoinPoints a
+  traverse_ printKTable $ aPkJoinPoints a
   putStrLn "\n//// KTables with re-key\n"
-  -- traverse_ printKTableRekeyed rkjps
+  traverse_ printKTableRekeyed $ aRekeyJoinPoints a
   putStrLn "\n//// Principal table stream\n"
   printFromStream $ rName (qFrom $ aQuery a)
   putStrLn "\n//// Accumulated result of the join\n"
@@ -95,7 +95,7 @@ printKTable jp = do
 
 printKTableRekeyed :: JoinPoint -> IO ()
 printKTableRekeyed jp =
-  if isOptional
+  if opt
     then printOpt
     else printNonOpt
   where
@@ -103,13 +103,12 @@ printKTableRekeyed jp =
     c = jpColumn jp
     ts = sym [t]
     cs = sym [c]
-    idKey = ts <> "id" <> "key" -- TODO look up
-    newkey = sym [ts, cs, "key"]
-    newKeyType = "Long" -- TODO determine type
+    idKey = sym [t, "id", "key"] -- TODO look up pk name
+    newkey = sym [t, cs, "key"]
+    newKeyType = typeOf c
     newkeywrapper = ts <> "_" <> cs
-    env = ts <> "Envelope"
-    isOptional = False {-not $ isPk t c-}
-     -- TODO wrong: check nullable
+    env = sym [t, "Envelope"]
+    opt = isOptional t c
     printNonOpt = do
       putStrLn $ "val kt" <> newkeywrapper <> ": KTable[" <> newkey <> ", " <> ts <> "] ="
       putStrLn $
@@ -140,13 +139,13 @@ printFromStream t = do
   let key = sym [t, "id", "key"]
   let env = sym [t, "Envelope"]
   -- putStrLn $ "val fromStream = kStream[" <> key <> "Key, " <> env <> "](cfg, builder, cleansed_" <> ts <> ")"
-  putStrLn $ "val fromStream ="
+  putStrLn "val fromStream ="
   putStrLn $ "  kStream[" <> key <> ", " <> env <> ", " <> ts <> "]("
-  putStrLn $ "    cfg,"
-  putStrLn $ "    builder,"
+  putStrLn "    cfg,"
+  putStrLn "    builder,"
   putStrLn $ "    cleansed_" <> ts <> ","
-  putStrLn $ "    _.after"
-  putStrLn $ "  )"
+  putStrLn "    _.after"
+  putStrLn "  )"
 
 printAccumulationClass :: Analysis -> IO ()
 printAccumulationClass a = do
@@ -159,21 +158,22 @@ printAccumulationClass a = do
     jps = aDistinctJoinPoints a
 
 printJoinResult :: JoinPoint -> IO ()
-printJoinResult jp = putStrLn $ "  " <> joinPointName jp <> ": Option[" <> joinPointType jp <> "] = None,"
+printJoinResult jp = putStrLn $ "  " <> joinPointName <> ": Option[" <> env <> "] = None,"
+  where
+    env = sym [jpTable jp, "Envelope"]
+    joinPointName = "r" <> sym [jpTable jp] <> "_" <> sym [jpColumn jp]
 
 printForAvscGen :: Analysis -> IO ()
 printForAvscGen a = traverse_ printJp $ distinct (aKeySerdes a <> ((`JoinPoint` "id") <$> aValueSerdes a))
   where
     printJp jp = putStrLn $ "  " <> jpTable jp <> ":" <> jpColumn jp
-    tablePkJps = (`JoinPoint` "id") <$> aTables a
 
-joinPointName :: JoinPoint -> String
-joinPointName jp =
-  let ts = sym [jpTable jp]
-      cs = sym [jpColumn jp]
-   in "r" <> ts <> "_" <> cs
-
-joinPointType :: JoinPoint -> String
-joinPointType jp =
-  let ts = sym [jpTable jp]
-   in ts <> "Envelope"
+typeOf :: Column -> String
+typeOf c =
+  case toLower <$> cType c of
+    "number" -> "Long"
+    "varchar2" -> "String"
+    "char" -> "String"
+    "clob" -> "String"
+    "timestamp(6)" -> "Long"
+    _ -> error $ cType c -- TODO remove "error" calls

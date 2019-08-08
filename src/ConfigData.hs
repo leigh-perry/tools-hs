@@ -4,10 +4,12 @@ module ConfigData
   , relations
   , pkConstraints
   , isPk
+  , isOptional
+  , findColumn
   ) where
 
 import Data.Char (toUpper)
-import Data.List (groupBy)
+import Data.List (find, groupBy)
 import Data.Map.Strict ((!?))
 import qualified Data.Map.Strict as Map (Map, fromList)
 import Ddl
@@ -39,6 +41,22 @@ isPk tl cl =
     t = toUpper <$> tl
     c = toUpper <$> cl
     pkc = pkConstraints !? t
+
+findColumn :: String -> String -> Column
+findColumn tl cl = column
+  where
+    tu = toUpper <$> tl
+    cu = toUpper <$> cl
+    result = do
+      table <- relations !? tu
+      find (\c -> cu == cName c) (rColumns table)
+    column =
+      case result of
+        (Just c) -> c
+        Nothing -> error "wtf"
+
+isOptional :: String -> String -> Bool
+isOptional tl cl = cNullability (findColumn tl cl) == Nullable
 
 -- TODO query DB directly
 {-

@@ -2,9 +2,11 @@
 
 module QueryParser where
 
+import ConfigData (isPk)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, except)
 import Data.Either.Combinators (maybeToRight)
+import Data.List ((\\))
 import Data.Map.Strict ((!?))
 import qualified Data.Map.Strict as Map (Map, fromList)
 import Shared (distinct)
@@ -120,6 +122,8 @@ data Analysis =
     , aTables :: [String]
     , aGlobalKtables :: [String]
     , aDistinctJoinPoints :: [JoinPoint]
+    , aPkJoinPoints :: [JoinPoint]
+    , aRekeyJoinPoints :: [JoinPoint]
     , aKeySerdes :: [JoinPoint]
     , aValueSerdes :: [String]
     }
@@ -144,6 +148,9 @@ resolve query globalKtables = do
   let allTables = from : joinTables
   let gktables = filter (`elem` globalKtables) allTables
   let distinctJoinPoints = distinct $ (\rj -> [rjFrom rj, rjTo rj]) =<< resolvedJoins
+  let nonGlobalJoinPoints = filter (\jp -> jpTable jp `notElem` globalKtables) distinctJoinPoints
+  let pkJoinPoints = filter (\jp -> isPk (jpTable jp) (jpColumn jp)) nonGlobalJoinPoints
+  let rekeyJoinPoints = nonGlobalJoinPoints \\ pkJoinPoints
   -- key serde for distinct [ (every joinpoint table)*(id,joincol) + from(id) ]
   let keySerdes =
         distinct $
@@ -160,6 +167,8 @@ resolve query globalKtables = do
       , aTables = allTables
       , aGlobalKtables = gktables
       , aDistinctJoinPoints = distinctJoinPoints
+      , aPkJoinPoints = pkJoinPoints
+      , aRekeyJoinPoints = rekeyJoinPoints
       , aKeySerdes = keySerdes
       , aValueSerdes = valueSerdes
       }
