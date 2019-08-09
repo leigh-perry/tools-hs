@@ -130,8 +130,8 @@ data Analysis =
   deriving (Show, Eq)
 
 ----
-analyse :: String -> [String] -> ExceptT ParseSqlError IO Analysis
-analyse filepath globalKtables = do
+analyse :: [String] -> String -> ExceptT ParseSqlError IO Analysis
+analyse globalKtables filepath = do
   s <- liftIO $ readFile filepath
   let result = parse sqlParser "SQL" s
   except $
