@@ -13,7 +13,6 @@ data Column =
     , cPrecision :: Maybe Integer
     , cScale :: Maybe Integer
     , cNullability :: Nullability
-    , cId :: Integer
     }
   deriving (Show, Eq)
 
