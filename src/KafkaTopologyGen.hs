@@ -150,17 +150,17 @@ printFromStream t = do
 printAccumulationClass :: Analysis -> IO ()
 printAccumulationClass a = do
   putStrLn "private case class Accumulation("
-  putStrLn $ "  streamValue: " <> fts <> "Envelope,"
+  putStrLn $ "  streamValue: " <> ts <> ","
   traverse_ printJoinResult jps
   putStrLn ")"
   where
-    fts = sym [aFromTable a]
+    ts = sym [aFromTable a]
     jps = aDistinctJoinPoints a
 
 printJoinResult :: JoinPoint -> IO ()
-printJoinResult jp = putStrLn $ "  " <> joinPointName <> ": Option[" <> env <> "] = None,"
+printJoinResult jp = putStrLn $ "  " <> joinPointName <> ": Option[" <> ts <> "] = None,"
   where
-    env = sym [jpTable jp, "Envelope"]
+    ts = sym [jpTable jp]
     joinPointName = "r" <> sym [jpTable jp] <> "_" <> sym [jpColumn jp]
 
 printForAvscGen :: Analysis -> IO ()
