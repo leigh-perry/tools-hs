@@ -7,7 +7,9 @@ module KafkaTopologyGen
 import ConfigData (findColumn, pkConstraints)
 import Data.Char (toLower, toUpper)
 import Data.Foldable (traverse_)
+import Data.Graph (Graph, Vertex, graphFromEdges)
 import Data.Map.Strict ((!?))
+import Data.Tree (Tree, unfoldTree)
 import Ddl
 import QueryParser hiding (sym)
 import Shared (distinct, sym)
@@ -37,7 +39,50 @@ genTopology a gkts = do
   print $ aFromTable a
   print $ aKeySerdes a
   print $ aValueSerdes a
+  let (dag, vertexToNode, keyToVertex) = makeDag
+  let vss = foldr (:) [] dag
+  print $ dumpthem vertexToNode vss
 
+dumpthem :: (Vertex -> (Desc, SomeV, [SomeV])) -> [[Vertex]] -> [[String]]
+dumpthem vertexToNode vss = dumpit vertexToNode <$> vss
+
+dumpit :: (Vertex -> (Desc, SomeV, [SomeV])) -> [Vertex] -> [String]
+dumpit vertexToNode vs =
+  (\v ->
+     let (Desc q, SomeV sv, _) = vertexToNode v
+      in q <> " " <> sv) <$>
+  vs
+
+{-
+   5 --> 7
+   |     |
+   v     V
+   1 --> 4 --> 8
+
+
+-}
+newtype Desc =
+  Desc String
+  deriving (Show, Eq)
+
+newtype SomeV =
+  SomeV String
+  deriving (Show, Eq, Ord)
+
+makeDag :: (Graph, Vertex -> (Desc, SomeV, [SomeV]), SomeV -> Maybe Vertex)
+makeDag =
+  graphFromEdges
+    [ (Desc "node4", SomeV "v4", [SomeV "v8"]) -- the first component can be of any type
+    , (Desc "node8", SomeV "v8", [])
+    , (Desc "node7", SomeV "v7", [SomeV "v4"])
+    , (Desc "node5", SomeV "v5", [SomeV "v1", SomeV "v7"])
+    , (Desc "node1", SomeV "v1", [SomeV "v4"])
+    ]
+
+-- array (0,4) [(0,[1]),(1,[4]),(2,[0,3]),(3,[1]),(4,[])]
+------------
+------------
+------------
 printSerdeKey :: JoinPoint -> IO ()
 printSerdeKey jp = do
   let s = sym [jpTable jp, jpColumn jp, "key"]
@@ -177,3 +222,11 @@ typeOf c =
     "clob" -> "String"
     "timestamp(6)" -> "Long"
     _ -> error $ cType c -- TODO remove "error" calls
+
+makeTree :: Tree Integer
+makeTree =
+  let buildNode x =
+        if 2 * x + 1 > 7
+          then (x, [])
+          else (x, [2 * x, 2 * x + 1])
+   in unfoldTree buildNode 1

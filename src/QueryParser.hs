@@ -109,7 +109,8 @@ data JoinPoint =
 
 data ResolvedJoin =
   ResolvedJoin
-    { rjFrom :: JoinPoint
+    { rjType :: JoinType
+    , rjFrom :: JoinPoint
     , rjTo :: JoinPoint
     }
   deriving (Show, Eq)
@@ -190,7 +191,7 @@ resolveJoin :: Map.Map String String -> Join -> Either ParseSqlError ResolvedJoi
 resolveJoin tnm j = do
   tf <- tableName (tcTableName $ jFrom j)
   tt <- tableName (tcTableName $ jTo j)
-  return $ ResolvedJoin (JoinPoint tf (tcColumnName (jFrom j))) (JoinPoint tt (tcColumnName (jTo j)))
+  return $ ResolvedJoin (jType j) (JoinPoint tf (tcColumnName (jFrom j))) (JoinPoint tt (tcColumnName (jTo j)))
   where
     tableName :: String -> Either ParseSqlError String
     tableName t = maybeToRight (UnknownAlias t) (tnm !? t)
